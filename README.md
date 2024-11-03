@@ -14,7 +14,7 @@ A comprehensive analytics platform for monitoring and analyzing the health of De
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/defi-health-monitor.git
+git clone https://github.com/DiegoARP/defi-health-monitor.git
 cd defi-health-monitor
 ```
 
@@ -32,7 +32,6 @@ pip install -r requirements.txt
 4. Set up environment variables
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
 ```
 
 ## Development
