@@ -6,53 +6,57 @@ import logging
 from datetime import datetime
 from typing import Dict, List
 from pathlib import Path
+import sys
+import asyncio
 
 from defi_health.collectors.defi_collector import DefiDataCollector
-from defi_health.analyzers.protocol_analyzer import ProtocolAnalyzer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ProtocolVisualizer:
+    """Visualizes DeFi protocol data with timestamps"""
+    
     def __init__(self, data: pd.DataFrame):
         self.data = data
         self.output_dir = Path("reports")
         self.output_dir.mkdir(exist_ok=True)
+        # Store timestamp when visualizer is initialized
+        self._timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+        logger.info(f"Initializing visualizer with data as of {self._timestamp}")
+
+    @property
+    def timestamp(self):
+        """Get the timestamp for the current data"""
+        return self._timestamp
 
     def create_tvl_visualization(self) -> None:
         """Create TVL distribution visualization"""
-        # TVL Treemap with updated formatting
+        title = f'Protocol TVL Distribution (as of {self.timestamp})'
+        logger.info(f"Creating {title}")
+        
         fig = px.treemap(
             self.data,
             values='tvl',
             path=[px.Constant('All Protocols'), 'name'],
-            title='Protocol TVL Distribution',
+            title=title,
             color='tvl',
             color_continuous_scale='Viridis'
         )
         
-        # Update hover template to format values
         fig.update_traces(
             texttemplate="%{label}<br>$%{value:,.0f}",
             hovertemplate="%{label}<br>TVL: $%{value:,.0f}<extra></extra>"
         )
         
-        fig.update_layout(
-            height=800,
-            title={
-                'text': "Protocol TVL Distribution",
-                'y':0.95,
-                'x':0.5,
-                'xanchor': 'center',
-                'yanchor': 'top'
-            }
-        )
-        
+        fig.update_layout(height=800)
         fig.write_html(self.output_dir / "tvl_distribution.html")
 
     def create_chain_analysis(self) -> None:
         """Create chain distribution analysis"""
-        # Calculate chain frequencies
+        title = f'Chain Analysis (as of {self.timestamp})'
+        logger.info(f"Creating {title}")
+        
         chain_counts = {}
         total_tvl_by_chain = {}
         
@@ -62,14 +66,12 @@ class ProtocolVisualizer:
                 chain_counts[chain] = chain_counts.get(chain, 0) + 1
                 total_tvl_by_chain[chain] = total_tvl_by_chain.get(chain, 0) + tvl_per_chain
 
-        # Create two subplots
         fig = make_subplots(
             rows=1, cols=2,
             subplot_titles=('Protocol Count by Chain', 'TVL by Chain (Billions)'),
             specs=[[{"type": "bar"}, {"type": "bar"}]]
         )
 
-        # Protocol Count
         chains_sorted = sorted(chain_counts.items(), key=lambda x: x[1], reverse=True)
         fig.add_trace(
             go.Bar(
@@ -81,7 +83,6 @@ class ProtocolVisualizer:
             row=1, col=1
         )
 
-        # TVL by Chain
         tvl_sorted = sorted(total_tvl_by_chain.items(), key=lambda x: x[1], reverse=True)
         fig.add_trace(
             go.Bar(
@@ -96,26 +97,22 @@ class ProtocolVisualizer:
         fig.update_layout(
             height=500,
             title={
-                'text': "Chain Analysis",
-                'y':0.95,
-                'x':0.5,
+                'text': title,
+                'y': 0.95,
+                'x': 0.5,
                 'xanchor': 'center',
                 'yanchor': 'top'
             },
             showlegend=False
         )
         
-        # Update axes labels
-        fig.update_xaxes(title_text="Chain", row=1, col=1)
-        fig.update_xaxes(title_text="Chain", row=1, col=2)
-        fig.update_yaxes(title_text="Number of Protocols", row=1, col=1)
-        fig.update_yaxes(title_text="TVL (Billions USD)", row=1, col=2)
-        
         fig.write_html(self.output_dir / "chain_analysis.html")
 
     def create_risk_analysis(self) -> None:
         """Create risk analysis visualization"""
-        # Extract risk levels and create risk metrics
+        title = f'Risk Analysis (as of {self.timestamp})'
+        logger.info(f"Creating {title}")
+        
         risk_data = []
         for idx, row in self.data.iterrows():
             risk_level = row['health_metrics']['risk_level']
@@ -128,7 +125,6 @@ class ProtocolVisualizer:
         
         risk_df = pd.DataFrame(risk_data)
         
-        # Create subplot with correct specs for pie charts
         fig = make_subplots(
             rows=2, cols=2,
             subplot_titles=(
@@ -143,7 +139,6 @@ class ProtocolVisualizer:
             ]
         )
 
-        # TVL by Risk Level
         tvl_by_risk = risk_df.groupby('risk_level')['tvl'].sum()
         fig.add_trace(
             go.Pie(
@@ -155,7 +150,6 @@ class ProtocolVisualizer:
             row=1, col=1
         )
 
-        # Count by Risk Level
         count_by_risk = risk_df['risk_level'].value_counts()
         fig.add_trace(
             go.Pie(
@@ -167,7 +161,6 @@ class ProtocolVisualizer:
             row=1, col=2
         )
 
-        # Chain Diversity vs TVL Scatter
         fig.add_trace(
             go.Scatter(
                 x=risk_df['chain_count'],
@@ -186,7 +179,6 @@ class ProtocolVisualizer:
             row=2, col=1
         )
 
-        # Risk Distribution Bar
         risk_order = ['Low', 'Medium', 'High']
         risk_colors = {'Low': '#00CC96', 'Medium': '#FFA15A', 'High': '#EF553B'}
         
@@ -204,45 +196,26 @@ class ProtocolVisualizer:
         fig.update_layout(
             height=800,
             title={
-                'text': "Risk Analysis Dashboard",
-                'y':0.95,
-                'x':0.5,
+                'text': title,
+                'y': 0.95,
+                'x': 0.5,
                 'xanchor': 'center',
                 'yanchor': 'top'
             },
             showlegend=False
         )
         
-        # Update axes labels for scatter and bar plots
-        fig.update_xaxes(title_text="Number of Chains", row=2, col=1)
-        fig.update_xaxes(title_text="Risk Level", row=2, col=2)
-        fig.update_yaxes(title_text="TVL (Billions USD)", row=2, col=1)
-        fig.update_yaxes(title_text="Number of Protocols", row=2, col=2)
-        
-        # Update colors and style
-        fig.update_layout(
-            paper_bgcolor='white',
-            plot_bgcolor='white',
-            font=dict(size=12)
-        )
-        
-        # Add grid lines to scatter and bar plots
-        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray', row=2)
-        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray', row=2)
-        
         fig.write_html(self.output_dir / "risk_analysis.html")
 
 async def main():
     """Generate visualizations for protocol analysis"""
-    # Collect data
     collector = DefiDataCollector()
-    df = await collector.analyze_protocols(top_n=50)  # Increased to 50 for better visualization
+    df = await collector.analyze_protocols(top_n=50)
     
     if not df.empty:
-        # Create visualizations
         visualizer = ProtocolVisualizer(df)
         
-        logger.info("Creating visualizations...")
+        logger.info(f"Creating visualizations for data as of {visualizer.timestamp}")
         visualizer.create_tvl_visualization()
         logger.info("Created TVL visualization")
         
@@ -252,7 +225,7 @@ async def main():
         visualizer.create_risk_analysis()
         logger.info("Created risk analysis")
         
-        logger.info(f"Visualizations created in {visualizer.output_dir} directory")
+        logger.info(f"All visualizations created in {visualizer.output_dir} directory")
         logger.info("Open the HTML files in a web browser to view interactive charts")
 
 if __name__ == "__main__":
